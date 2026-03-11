@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auction Scraper</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <h1>Auction Scraper</h1>
+      <div class="header-actions">
+        <span id="last-run" class="last-run"></span>
+        <button id="btn-scrape" class="btn btn-primary">Scrape Now</button>
+      </div>
+    </div>
+
+    <div id="progress-section" class="progress-section hidden">
+      <div class="progress-bar-track">
+        <div id="progress-bar" class="progress-bar-fill"></div>
+      </div>
+      <div class="progress-info">
+        <span id="progress-text">Starting...</span>
+        <button id="btn-abort" class="btn btn-small btn-danger">Stop</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="source-tabs">
+      <button class="source-tab active" data-source="cc">Cash Converters</button>
+      <button class="source-tab" data-source="dd">Dollar Dealers</button>
+    </div>
+
+    <div class="toolbar">
+      <div class="filters">
+        <button class="btn btn-filter active" data-filter="all">All</button>
+        <button class="btn btn-filter" data-filter="new">New Only <span id="new-badge" class="badge hidden">0</span></button>
+        <button class="btn btn-filter" data-filter="hidden">Hidden <span id="hidden-badge" class="badge badge-muted hidden">0</span></button>
+      </div>
+      <label class="group-toggle">
+        <input type="checkbox" id="group-by-term" />
+        <span>Group by term</span>
+      </label>
+      <div class="sort-controls">
+        <label>Sort:</label>
+        <select id="sort-select">
+          <option value="buy_now_price:ASC">Buy Now (low-high)</option>
+          <option value="buy_now_price:DESC">Buy Now (high-low)</option>
+          <option value="current_price:ASC">Current Price (low-high)</option>
+          <option value="current_price:DESC">Current Price (high-low)</option>
+          <option value="end_date:ASC">Ending Soon</option>
+          <option value="bids:DESC">Most Bids</option>
+          <option value="first_seen_at:DESC">Newest First</option>
+        </select>
+      </div>
+      <button id="btn-mark-all" class="btn btn-small">Mark All Seen</button>
+      <div class="add-url">
+        <input type="text" id="add-url-input" placeholder="Add listing URL..." />
+        <button id="btn-add-url" class="btn btn-small btn-primary">Add</button>
+      </div>
+    </div>
+
+    <div id="listings-grid" class="listings-grid">
+      <div class="empty-state" id="empty-state">
+        <p>No listings yet. Click <strong>Scrape Now</strong> to get started.</p>
+      </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settings-panel" class="settings-panel">
+      <h3>Search Terms</h3>
+      <div id="terms-list" class="terms-list"></div>
+      <div class="terms-add">
+        <input type="text" id="new-term-input" placeholder="Add search term..." />
+        <button id="btn-add-term" class="btn btn-small btn-primary">Add</button>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <button id="btn-settings" class="btn btn-small">Settings</button>
+    <span class="footer-info">Data stored locally in SQLite</span>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>

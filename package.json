@@ -1,0 +1,14 @@
+{
+  "name": "cc-scraper",
+  "version": "1.0.0",
+  "description": "Cash Converters NZ auction scraper with web dashboard",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "cheerio": "1.0.0-rc.12",
+    "express": "^4.21.0"
+  }
+}
