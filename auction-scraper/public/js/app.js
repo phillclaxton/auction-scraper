@@ -33,6 +33,9 @@
   // Default sorts per source
   const DEFAULT_SORT = { cc: 'buy_now_price:ASC', dd: 'price:ASC' };
 
+  // Schedule state
+  let scheduleConfig = { enabled: true, intervalHours: 4, startHour: 6, endHour: 20 };
+
   // DOM refs
   const btnScrape = document.getElementById('btn-scrape');
   const btnAbort = document.getElementById('btn-abort');
@@ -56,10 +59,18 @@
   const groupByTermCheckbox = document.getElementById('group-by-term');
   const filterButtons = document.querySelectorAll('.btn-filter');
   const sourceTabs = document.querySelectorAll('.source-tab');
+  const scheduleEnabledCb = document.getElementById('schedule-enabled');
+  const scheduleIntervalSel = document.getElementById('schedule-interval');
+  const scheduleStartSel = document.getElementById('schedule-start-hour');
+  const scheduleEndSel = document.getElementById('schedule-end-hour');
+  const scheduleFields = document.getElementById('schedule-fields');
+  const schedulePreview = document.getElementById('schedule-preview');
+  const btnSaveSchedule = document.getElementById('btn-save-schedule');
 
   // --- Init ---
   async function init() {
     buildSortOptions();
+    buildHourSelects();
     await fetchListings();
     await fetchConfig();
     connectSSE();
@@ -91,6 +102,12 @@
         fetchListings();
       });
     });
+    scheduleEnabledCb.addEventListener('change', updateScheduleFieldsVisibility);
+    [scheduleIntervalSel, scheduleStartSel, scheduleEndSel].forEach(el => {
+      el.addEventListener('change', updateSchedulePreview);
+    });
+    btnSaveSchedule.addEventListener('click', saveSchedule);
+
     sourceTabs.forEach(tab => {
       tab.addEventListener('click', () => {
         if (tab.dataset.source === currentSource) return;
@@ -125,7 +142,7 @@
     const showHidden = currentFilter === 'hidden';
     const params = new URLSearchParams({ sort, direction, filterNew, showHidden, source: currentSource });
     try {
-      const res = await fetch(`/api/listings?${params}`);
+      const res = await fetch(`api/listings?${params}`);
       const data = await res.json();
       listings = data.listings;
       updateNewBadge(data.newCount);
@@ -138,15 +155,19 @@
 
   async function fetchConfig() {
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch('api/config');
       const data = await res.json();
       searchTermsConfig = data.searchTerms;
       renderTerms(data.searchTerms);
       const lastRun = currentSource === 'dd' ? data.ddLastRun : data.lastRun;
       if (lastRun && lastRun.completed_at) {
-        lastRunEl.textContent = 'Last run: ' + formatDate(lastRun.completed_at);
+        lastRunEl.textContent = 'Last run: ' + timeAgo(lastRun.completed_at);
       } else {
         lastRunEl.textContent = '';
+      }
+      if (data.schedule) {
+        scheduleConfig = data.schedule;
+        applyScheduleToUI(scheduleConfig);
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);
@@ -156,7 +177,7 @@
   async function startScrape() {
     btnScrape.disabled = true;
     try {
-      const res = await fetch('/api/scrape', {
+      const res = await fetch('api/scrape', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: currentSource }),
@@ -176,7 +197,7 @@
 
   async function abortScrape() {
     try {
-      await fetch('/api/scrape/abort', {
+      await fetch('api/scrape/abort', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: currentSource }),
@@ -189,7 +210,7 @@
   async function markSeen(id, e) {
     e.stopPropagation();
     try {
-      await fetch(`/api/listings/${id}/seen?source=${currentSource}`, { method: 'POST' });
+      await fetch(`api/listings/${id}/seen?source=${currentSource}`, { method: 'POST' });
       await fetchListings();
     } catch (err) {
       console.error('Failed to mark seen:', err);
@@ -198,7 +219,7 @@
 
   async function markAllSeen() {
     try {
-      await fetch(`/api/listings/mark-all-seen?source=${currentSource}`, { method: 'POST' });
+      await fetch(`api/listings/mark-all-seen?source=${currentSource}`, { method: 'POST' });
       await fetchListings();
     } catch (err) {
       console.error('Failed to mark all seen:', err);
@@ -208,7 +229,7 @@
   async function hideListing(id, e) {
     e.stopPropagation();
     try {
-      await fetch(`/api/listings/${id}/hide?source=${currentSource}`, { method: 'POST' });
+      await fetch(`api/listings/${id}/hide?source=${currentSource}`, { method: 'POST' });
       await fetchListings();
     } catch (err) {
       console.error('Failed to hide listing:', err);
@@ -218,7 +239,7 @@
   async function unhideListing(id, e) {
     e.stopPropagation();
     try {
-      await fetch(`/api/listings/${id}/unhide?source=${currentSource}`, { method: 'POST' });
+      await fetch(`api/listings/${id}/unhide?source=${currentSource}`, { method: 'POST' });
       await fetchListings();
     } catch (err) {
       console.error('Failed to unhide listing:', err);
@@ -229,10 +250,10 @@
     const term = newTermInput.value.trim();
     if (!term) return;
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch('api/config');
       const data = await res.json();
       const terms = [...data.searchTerms, { term, max_price: null }];
-      await fetch('/api/config', {
+      await fetch('api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ searchTerms: terms }),
@@ -250,7 +271,7 @@
     btnAddUrl.disabled = true;
     addUrlInput.classList.remove('error', 'success');
     try {
-      const res = await fetch('/api/scrape/single', {
+      const res = await fetch('api/scrape/single', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url, source: currentSource }),
@@ -276,11 +297,11 @@
 
   async function removeTerm(term) {
     try {
-      const res = await fetch('/api/config');
+      const res = await fetch('api/config');
       const data = await res.json();
       const terms = data.searchTerms.filter(t => t.term !== term);
       if (terms.length === 0) return;
-      await fetch('/api/config', {
+      await fetch('api/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ searchTerms: terms }),
@@ -293,7 +314,7 @@
 
   async function updateMaxPrice(term, maxPrice) {
     try {
-      await fetch('/api/config/max-price', {
+      await fetch('api/config/max-price', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ term, maxPrice: maxPrice || null }),
@@ -307,13 +328,96 @@
 
   async function toggleSiteEnabled(term, site, enabled) {
     try {
-      await fetch('/api/config/site-enabled', {
+      await fetch('api/config/site-enabled', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ term, site, enabled }),
       });
     } catch (err) {
       console.error('Failed to toggle site enabled:', err);
+    }
+  }
+
+  // --- Schedule ---
+
+  function buildHourSelects() {
+    const labels = [
+      '12:00 am','1:00 am','2:00 am','3:00 am','4:00 am','5:00 am',
+      '6:00 am','7:00 am','8:00 am','9:00 am','10:00 am','11:00 am',
+      '12:00 pm','1:00 pm','2:00 pm','3:00 pm','4:00 pm','5:00 pm',
+      '6:00 pm','7:00 pm','8:00 pm','9:00 pm','10:00 pm','11:00 pm',
+    ];
+    for (let h = 0; h < 24; h++) {
+      const startOpt = document.createElement('option');
+      startOpt.value = h;
+      startOpt.textContent = labels[h];
+      scheduleStartSel.appendChild(startOpt);
+
+      const endOpt = document.createElement('option');
+      endOpt.value = h;
+      endOpt.textContent = labels[h];
+      scheduleEndSel.appendChild(endOpt);
+    }
+  }
+
+  function applyScheduleToUI(cfg) {
+    scheduleEnabledCb.checked = cfg.enabled;
+    scheduleIntervalSel.value = String(cfg.intervalHours);
+    scheduleStartSel.value = String(cfg.startHour);
+    scheduleEndSel.value = String(cfg.endHour);
+    updateScheduleFieldsVisibility();
+    updateSchedulePreview();
+  }
+
+  function updateScheduleFieldsVisibility() {
+    scheduleFields.classList.toggle('hidden', !scheduleEnabledCb.checked);
+  }
+
+  function updateSchedulePreview() {
+    const interval = parseInt(scheduleIntervalSel.value, 10);
+    const start = parseInt(scheduleStartSel.value, 10);
+    const end = parseInt(scheduleEndSel.value, 10);
+    if (isNaN(interval) || isNaN(start) || isNaN(end) || end <= start) {
+      schedulePreview.textContent = '';
+      return;
+    }
+    const hours = [];
+    for (let h = start; h <= end; h += interval) hours.push(h);
+    if (hours.length === 0) {
+      schedulePreview.textContent = 'No runs scheduled in this window.';
+      return;
+    }
+    const labels = hours.map(formatHour).join(', ');
+    schedulePreview.textContent = `Will run at: ${labels} (${hours.length}× per day)`;
+  }
+
+  async function saveSchedule() {
+    const enabled = scheduleEnabledCb.checked;
+    const intervalHours = parseInt(scheduleIntervalSel.value, 10);
+    const startHour = parseInt(scheduleStartSel.value, 10);
+    const endHour = parseInt(scheduleEndSel.value, 10);
+    if (endHour <= startHour) {
+      schedulePreview.textContent = 'End time must be after start time.';
+      return;
+    }
+    try {
+      btnSaveSchedule.disabled = true;
+      const res = await fetch('api/config/schedule', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, intervalHours, startHour, endHour }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        scheduleConfig = data.schedule;
+        updateSchedulePreview();
+        btnSaveSchedule.textContent = 'Saved!';
+        setTimeout(() => { btnSaveSchedule.textContent = 'Save Schedule'; }, 1500);
+      }
+    } catch (err) {
+      console.error('Failed to save schedule:', err);
+    } finally {
+      btnSaveSchedule.disabled = false;
     }
   }
 
@@ -325,7 +429,7 @@
   // --- SSE ---
   function connectSSE() {
     if (eventSource) eventSource.close();
-    eventSource = new EventSource('/api/scrape/progress');
+    eventSource = new EventSource('api/scrape/progress');
 
     eventSource.addEventListener('connected', (e) => {
       const data = JSON.parse(e.data);
@@ -674,10 +778,23 @@
     return str;
   }
 
-  function formatDate(isoStr) {
+  function formatHour(h) {
+    if (h === 0) return '12:00 am';
+    if (h === 12) return '12:00 pm';
+    return h < 12 ? `${h}:00 am` : `${h - 12}:00 pm`;
+  }
+
+  function timeAgo(isoStr) {
     if (!isoStr) return '';
     const d = new Date(isoStr + 'Z');
-    return d.toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    const seconds = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return minutes === 1 ? '1 minute ago' : `${minutes} minutes ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+    const days = Math.floor(hours / 24);
+    return days === 1 ? '1 day ago' : `${days} days ago`;
   }
 
   function esc(str) {
@@ -686,6 +803,9 @@
     d.textContent = str;
     return d.innerHTML;
   }
+
+  // Refresh relative timestamps every 60s
+  setInterval(() => fetchConfig(), 60000);
 
   // --- Start ---
   init();

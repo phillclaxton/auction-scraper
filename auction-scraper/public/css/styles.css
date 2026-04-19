@@ -9,8 +9,8 @@
   --bg-card: #1a1d27;
   --bg-card-hover: #22263a;
   --bg-header: #141620;
-  --text: #e0e0e8;
-  --text-muted: #888899;
+  --text: #ededf2;
+  --text-muted: #a0a0b4;
   --accent: #4f8cff;
   --accent-hover: #6fa0ff;
   --green: #34d399;
@@ -24,6 +24,8 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  font-weight: 450;
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -49,8 +51,8 @@ header {
 }
 
 h1 {
-  font-size: 1.3rem;
-  font-weight: 600;
+  font-size: 1.5rem;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -61,7 +63,8 @@ h1 {
 }
 
 .last-run {
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -94,7 +97,8 @@ h1 {
   align-items: center;
   justify-content: space-between;
   margin-top: 8px;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -104,8 +108,8 @@ h1 {
   align-items: center;
   gap: 6px;
   padding: 8px 18px;
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--bg-card);
@@ -146,7 +150,7 @@ h1 {
 
 .btn-small {
   padding: 5px 12px;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
 }
 
 .btn-filter {
@@ -171,8 +175,8 @@ h1 {
 
 .source-tab {
   padding: 10px 24px;
-  font-size: 0.88rem;
-  font-weight: 500;
+  font-size: 0.95rem;
+  font-weight: 600;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -214,7 +218,8 @@ h1 {
 }
 
 .sort-controls label {
-  font-size: 0.82rem;
+  font-size: 0.88rem;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -224,7 +229,8 @@ h1 {
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 5px 10px;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 .add-url {
@@ -240,7 +246,8 @@ h1 {
   border-radius: 6px;
   padding: 5px 10px;
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: 0.88rem;
+  font-weight: 500;
 }
 
 .add-url input::placeholder {
@@ -258,7 +265,7 @@ h1 {
 .badge {
   background: var(--green);
   color: #000;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 700;
   padding: 1px 7px;
   border-radius: 10px;
@@ -278,7 +285,8 @@ h1 {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
+  font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
@@ -323,7 +331,7 @@ h1 {
 }
 
 .group-chevron {
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   color: var(--text-muted);
   width: 14px;
   text-align: center;
@@ -335,14 +343,14 @@ h1 {
 }
 
 .group-term {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
   text-transform: capitalize;
 }
 
 .group-count {
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 0.8rem;
+  font-weight: 700;
   background: var(--border);
   color: var(--text-muted);
   padding: 1px 8px;
@@ -417,7 +425,8 @@ main {
   align-items: center;
   justify-content: center;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.85rem;
+  font-weight: 500;
 }
 
 .card-body {
@@ -436,8 +445,8 @@ main {
 }
 
 .card-title {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-size: 1.05rem;
+  font-weight: 700;
   line-height: 1.3;
   flex: 1;
 }
@@ -445,7 +454,7 @@ main {
 .new-tag {
   background: var(--green);
   color: #000;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 800;
   padding: 2px 8px;
   border-radius: 4px;
@@ -472,15 +481,16 @@ main {
 }
 
 .price-label {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .price-value {
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 .price-value.buy-now {
@@ -496,14 +506,15 @@ main {
 }
 
 .dd-prices .price-value {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
 }
 
 .card-meta {
   display: flex;
   align-items: center;
   gap: 12px;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text-muted);
   flex-wrap: wrap;
 }
@@ -524,7 +535,8 @@ main {
 }
 
 .search-tag {
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  font-weight: 600;
   background: rgba(79, 140, 255, 0.1);
   color: var(--accent);
   padding: 2px 8px;
@@ -532,10 +544,10 @@ main {
 }
 
 .card-link {
-  font-size: 0.78rem;
+  font-size: 0.85rem;
   color: var(--accent);
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .card-actions {
@@ -548,7 +560,8 @@ main {
   background: none;
   border: none;
   color: var(--text-muted);
-  font-size: 0.72rem;
+  font-size: 0.8rem;
+  font-weight: 500;
   cursor: pointer;
   padding: 2px 6px;
   border-radius: 4px;
@@ -577,7 +590,8 @@ main {
 }
 
 .settings-panel h3 {
-  font-size: 0.95rem;
+  font-size: 1.05rem;
+  font-weight: 700;
   margin-bottom: 12px;
 }
 
@@ -599,8 +613,8 @@ main {
 }
 
 .term-name {
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: 0.92rem;
+  font-weight: 600;
   flex: 1;
 }
 
@@ -614,7 +628,7 @@ main {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
@@ -628,7 +642,7 @@ main {
 }
 
 .site-toggle span {
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.02em;
 }
 
@@ -636,7 +650,8 @@ main {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text-muted);
 }
 
@@ -647,7 +662,8 @@ main {
   border-radius: 4px;
   padding: 3px 8px;
   color: var(--text);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   text-align: right;
 }
 
@@ -678,11 +694,95 @@ main {
   border-radius: 6px;
   padding: 6px 12px;
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.92rem;
+  font-weight: 500;
 }
 
 .terms-add input::placeholder {
   color: var(--text-muted);
+}
+
+/* --- Settings Divider --- */
+.settings-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 20px 0;
+}
+
+/* --- Schedule Config --- */
+.schedule-config {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.schedule-enable-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+
+.schedule-enable-row input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.schedule-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 23px;
+}
+
+.schedule-fields.hidden {
+  display: none;
+}
+
+.schedule-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.schedule-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  min-width: 60px;
+}
+
+.schedule-row select {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.schedule-sep {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.schedule-tz {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+
+.schedule-preview {
+  font-size: 0.82rem;
+  font-weight: 500;
+  color: var(--accent);
+  min-height: 1.2em;
 }
 
 /* --- Footer --- */
@@ -692,7 +792,8 @@ footer {
   justify-content: space-between;
   padding: 12px 24px;
   border-top: 1px solid var(--border);
-  font-size: 0.78rem;
+  font-size: 0.85rem;
+  font-weight: 500;
   color: var(--text-muted);
 }
 

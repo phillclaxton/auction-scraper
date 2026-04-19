@@ -90,7 +90,7 @@ class Scraper extends EventEmitter {
     }
   }
 
-  async scrape(searchTermEntries) {
+  async scrape(searchTermEntries, { triggerType = 'manual' } = {}) {
     // searchTermEntries: [{ term, max_price }]
     if (this.running) {
       this.emit('error', { message: 'A scrape is already in progress' });
@@ -99,7 +99,7 @@ class Scraper extends EventEmitter {
 
     this.running = true;
     this.aborted = false;
-    const runId = db.createScrapeRun();
+    const runId = db.createScrapeRun(triggerType);
     let totalFound = 0;
     let newCount = 0;
 

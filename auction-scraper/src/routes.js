@@ -1,4 +1,5 @@
 const express = require('express');
+const cron = require('node-cron');
 const db = require('./db');
 const Scraper = require('./scraper');
 const DDScraper = require('./dd-scraper');
@@ -9,6 +10,9 @@ const ddScraper = new DDScraper();
 
 // Connected SSE clients
 let sseClients = [];
+
+// Active cron tasks (replaced whenever schedule config changes)
+let cronTasks = [];
 
 // Pipe scraper events to all SSE clients
 function broadcast(event, data) {
@@ -36,6 +40,54 @@ ddScraper.on('progress', data => broadcast('progress', { ...data, source: 'dd' }
 ddScraper.on('listing', data => broadcast('listing', { ...data, source: 'dd' }));
 ddScraper.on('complete', data => broadcast('complete', { ...data, source: 'dd' }));
 ddScraper.on('error', data => broadcast('error', { ...data, source: 'dd' }));
+
+// --- Scheduled scraping ---
+
+function runScheduledScrape() {
+  const allTerms = db.getSearchTerms();
+
+  const ccTerms = allTerms.filter(t => t.cc_enabled);
+  if (ccTerms.length > 0 && !scraper.running) {
+    console.log(`[scheduled] Starting CC scrape with ${ccTerms.length} terms`);
+    scraper.scrape(ccTerms, { triggerType: 'scheduled' });
+  }
+
+  const ddTerms = allTerms.filter(t => t.dd_enabled);
+  if (ddTerms.length > 0 && !ddScraper.running) {
+    console.log(`[scheduled] Starting DD scrape with ${ddTerms.length} terms`);
+    ddScraper.scrape(ddTerms, { triggerType: 'scheduled' });
+  }
+}
+
+function buildScheduleHours(intervalHours, startHour, endHour) {
+  const hours = [];
+  for (let h = startHour; h <= endHour; h += intervalHours) {
+    hours.push(h);
+  }
+  return hours;
+}
+
+function setupSchedule() {
+  cronTasks.forEach(t => t.destroy());
+  cronTasks = [];
+
+  const schedConfig = db.getScheduleConfig();
+
+  if (!schedConfig.enabled) {
+    console.log('[schedule] Automatic scraping disabled');
+    return;
+  }
+
+  const hours = buildScheduleHours(schedConfig.intervalHours, schedConfig.startHour, schedConfig.endHour);
+  if (hours.length === 0) return;
+
+  const cronExpr = `0 ${hours.join(',')} * * *`;
+  const timeLabels = hours.map(h => `${String(h).padStart(2, '0')}:00`).join(', ');
+  console.log(`[schedule] Auto-scrape at ${timeLabels} NZ time (every ${schedConfig.intervalHours}h)`);
+
+  const task = cron.schedule(cronExpr, runScheduledScrape, { timezone: 'Pacific/Auckland' });
+  cronTasks.push(task);
+}
 
 // --- API Routes ---
 
@@ -147,6 +199,7 @@ router.get('/api/config', (req, res) => {
     searchTerms: db.getSearchTerms(),
     lastRun: db.getLastScrapeRun() || null,
     ddLastRun: db.ddGetLastScrapeRun() || null,
+    schedule: db.getScheduleConfig(),
   });
 });
 
@@ -168,6 +221,24 @@ router.post('/api/config/site-enabled', express.json(), (req, res) => {
   res.json({ ok: true, searchTerms: db.getSearchTerms() });
 });
 
+router.post('/api/config/schedule', express.json(), (req, res) => {
+  const { enabled, intervalHours, startHour, endHour } = req.body;
+  if (typeof enabled !== 'boolean') return res.status(400).json({ error: 'enabled (boolean) is required' });
+  if (!Number.isInteger(intervalHours) || intervalHours < 1) return res.status(400).json({ error: 'intervalHours must be a positive integer' });
+  if (!Number.isInteger(startHour) || startHour < 0 || startHour > 23) return res.status(400).json({ error: 'startHour must be 0–23' });
+  if (!Number.isInteger(endHour) || endHour < 0 || endHour > 23) return res.status(400).json({ error: 'endHour must be 0–23' });
+  if (endHour <= startHour) return res.status(400).json({ error: 'endHour must be after startHour' });
+
+  db.setScheduleConfig({ enabled, intervalHours, startHour, endHour });
+  setupSchedule();
+  res.json({ ok: true, schedule: db.getScheduleConfig() });
+});
+
+router.get('/api/scrape/log', (req, res) => {
+  const limit = parseInt(req.query.limit, 10) || 20;
+  res.json({ log: db.getScrapeLog(limit) });
+});
+
 router.post('/api/config/max-price', express.json(), (req, res) => {
   const { term, maxPrice } = req.body;
   if (!term) return res.status(400).json({ error: 'term is required' });
@@ -177,4 +248,4 @@ router.post('/api/config/max-price', express.json(), (req, res) => {
   res.json({ ok: true, searchTerms: db.getSearchTerms() });
 });
 
-module.exports = router;
+module.exports = { router, scraper, ddScraper, setupSchedule };

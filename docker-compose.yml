@@ -1,6 +1,6 @@
 services:
-  cc-scraper:
-    build: .
+  auction-scraper:
+    build: ./auction-scraper
     ports:
       - "3456:3456"
     volumes:

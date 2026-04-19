@@ -35,7 +35,8 @@ function init() {
       completed_at TEXT,
       total_found INTEGER DEFAULT 0,
       new_count INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'running'
+      status TEXT DEFAULT 'running',
+      trigger_type TEXT DEFAULT 'manual'
     );
 
     CREATE TABLE IF NOT EXISTS search_terms (
@@ -71,13 +72,19 @@ function init() {
       completed_at TEXT,
       total_found INTEGER DEFAULT 0,
       new_count INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'running'
+      status TEXT DEFAULT 'running',
+      trigger_type TEXT DEFAULT 'manual'
     );
 
     CREATE INDEX IF NOT EXISTS idx_dd_listings_is_new ON dd_listings(is_new);
     CREATE INDEX IF NOT EXISTS idx_dd_listings_status ON dd_listings(status);
     CREATE INDEX IF NOT EXISTS idx_dd_listings_price ON dd_listings(price);
     CREATE INDEX IF NOT EXISTS idx_dd_listings_hidden ON dd_listings(is_hidden);
+
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 
   // Migrate: add image_url column if missing
@@ -91,32 +98,9 @@ function init() {
   try { db.exec('ALTER TABLE search_terms ADD COLUMN dd_enabled INTEGER DEFAULT 1'); } catch {}
   // Migrate: add manually_added column if missing
   try { db.exec('ALTER TABLE listings ADD COLUMN manually_added INTEGER DEFAULT 0'); } catch {}
-
-  // Migrate: unhide previously price-auto-hidden items stuck as is_hidden=1
-  // Going forward, price auto-hides use is_hidden=2 so they can be reversed
-  // This one-time pass unhides any is_hidden=1 items whose price is under the current max
-  try {
-    const termsWithLimits = db.prepare('SELECT term, max_price FROM search_terms WHERE max_price IS NOT NULL').all();
-    if (termsWithLimits.length > 0) {
-      const mp = new Map(termsWithLimits.map(t => [t.term, t.max_price]));
-      const stuck = db.prepare("SELECT id, search_term, buy_now_price, current_price FROM listings WHERE is_hidden = 1 AND status = 'active'").all();
-      const toUnhide = [];
-      for (const row of stuck) {
-        if (!row.search_term) continue;
-        const lt = row.search_term.split(',').map(t => t.trim().toLowerCase());
-        const allHave = lt.every(t => mp.has(t));
-        if (!allHave) continue;
-        const price = (row.buy_now_price != null && row.buy_now_price > 0) ? row.buy_now_price : row.current_price;
-        if (price == null) continue;
-        const underLimit = lt.some(t => price <= mp.get(t));
-        if (underLimit) toUnhide.push(row.id);
-      }
-      if (toUnhide.length > 0) {
-        const ph = toUnhide.map(() => '?').join(',');
-        db.prepare(`UPDATE listings SET is_hidden = 0 WHERE id IN (${ph})`).run(...toUnhide);
-      }
-    }
-  } catch {}
+  // Migrate: add trigger_type column to scrape_runs if missing
+  try { db.exec("ALTER TABLE scrape_runs ADD COLUMN trigger_type TEXT DEFAULT 'manual'"); } catch {}
+  try { db.exec("ALTER TABLE dd_scrape_runs ADD COLUMN trigger_type TEXT DEFAULT 'manual'"); } catch {}
 
   // Seed default search terms if table is empty
   const count = db.prepare('SELECT COUNT(*) as c FROM search_terms').get();
@@ -232,8 +216,8 @@ function getHiddenIds() {
   return new Set(getDb().prepare("SELECT id FROM listings WHERE is_hidden > 0 AND status = 'active'").all().map(r => r.id));
 }
 
-function createScrapeRun() {
-  const result = getDb().prepare('INSERT INTO scrape_runs DEFAULT VALUES').run();
+function createScrapeRun(triggerType = 'manual') {
+  const result = getDb().prepare('INSERT INTO scrape_runs (trigger_type) VALUES (?)').run(triggerType);
   return result.lastInsertRowid;
 }
 
@@ -246,6 +230,13 @@ function completeScrapeRun(id, { totalFound, newCount, status = 'completed' }) {
 
 function getLastScrapeRun() {
   return getDb().prepare('SELECT * FROM scrape_runs ORDER BY id DESC LIMIT 1').get();
+}
+
+function getScrapeLog(limit = 20) {
+  const d = getDb();
+  const cc = d.prepare(`SELECT id, started_at, completed_at, total_found, new_count, status, trigger_type, 'cc' as source FROM scrape_runs ORDER BY id DESC LIMIT ?`).all(limit);
+  const dd = d.prepare(`SELECT id, started_at, completed_at, total_found, new_count, status, trigger_type, 'dd' as source FROM dd_scrape_runs ORDER BY id DESC LIMIT ?`).all(limit);
+  return [...cc, ...dd].sort((a, b) => b.started_at.localeCompare(a.started_at)).slice(0, limit);
 }
 
 function getSearchTerms() {
@@ -464,8 +455,8 @@ function ddGetHiddenIds() {
   return new Set(getDb().prepare("SELECT id FROM dd_listings WHERE is_hidden > 0 AND status = 'active'").all().map(r => r.id));
 }
 
-function ddCreateScrapeRun() {
-  const result = getDb().prepare('INSERT INTO dd_scrape_runs DEFAULT VALUES').run();
+function ddCreateScrapeRun(triggerType = 'manual') {
+  const result = getDb().prepare('INSERT INTO dd_scrape_runs (trigger_type) VALUES (?)').run(triggerType);
   return result.lastInsertRowid;
 }
 
@@ -547,6 +538,35 @@ function ddMarkStaleListings(activeIds) {
   d.prepare(`UPDATE dd_listings SET status = 'ended' WHERE status = 'active' AND manually_added = 0 AND id NOT IN (${placeholders})`).run(...activeIds);
 }
 
+// ========================
+// Schedule config
+// ========================
+
+function getScheduleConfig() {
+  const d = getDb();
+  const rows = d.prepare(
+    "SELECT key, value FROM app_settings WHERE key IN ('schedule_enabled','schedule_interval_hours','schedule_start_hour','schedule_end_hour')"
+  ).all();
+  const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  return {
+    enabled: map.schedule_enabled !== undefined ? map.schedule_enabled === '1' : true,
+    intervalHours: parseInt(map.schedule_interval_hours || '4', 10),
+    startHour: parseInt(map.schedule_start_hour || '6', 10),
+    endHour: parseInt(map.schedule_end_hour || '20', 10),
+  };
+}
+
+function setScheduleConfig({ enabled, intervalHours, startHour, endHour }) {
+  const d = getDb();
+  const upsert = d.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)');
+  d.transaction(() => {
+    upsert.run('schedule_enabled', enabled ? '1' : '0');
+    upsert.run('schedule_interval_hours', String(intervalHours));
+    upsert.run('schedule_start_hour', String(startHour));
+    upsert.run('schedule_end_hour', String(endHour));
+  })();
+}
+
 module.exports = {
   init,
   getDb,
@@ -563,6 +583,7 @@ module.exports = {
   createScrapeRun,
   completeScrapeRun,
   getLastScrapeRun,
+  getScrapeLog,
   getSearchTerms,
   setSearchTerms,
   updateTermMaxPrice,
@@ -587,4 +608,6 @@ module.exports = {
   ddCleanupHiddenListings,
   ddApplyMaxPriceFilters,
   ddMarkStaleListings,
+  getScheduleConfig,
+  setScheduleConfig,
 };

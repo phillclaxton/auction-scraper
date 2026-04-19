@@ -14,7 +14,7 @@ module.exports = {
 
   REQUEST_DELAY_MS: 1000,
 
-  DB_PATH: path.join(__dirname, '..', 'data', 'auctions.db'),
+  DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', 'data', 'auctions.db'),
 
   PORT: process.env.PORT || 3456,
 

@@ -58,7 +58,7 @@ class DDScraper extends EventEmitter {
     }
   }
 
-  async scrape(searchTermEntries) {
+  async scrape(searchTermEntries, { triggerType = 'manual' } = {}) {
     if (this.running) {
       this.emit('error', { message: 'A DD scrape is already in progress' });
       return;
@@ -66,7 +66,7 @@ class DDScraper extends EventEmitter {
 
     this.running = true;
     this.aborted = false;
-    const runId = db.ddCreateScrapeRun();
+    const runId = db.ddCreateScrapeRun(triggerType);
     let totalFound = 0;
     let newCount = 0;
 

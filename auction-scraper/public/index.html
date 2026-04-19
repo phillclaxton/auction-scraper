@@ -76,6 +76,36 @@
         <input type="text" id="new-term-input" placeholder="Add search term..." />
         <button id="btn-add-term" class="btn btn-small btn-primary">Add</button>
       </div>
+
+      <div class="settings-divider"></div>
+
+      <h3>Auto-Scrape Schedule</h3>
+      <div class="schedule-config">
+        <label class="schedule-enable-row">
+          <input type="checkbox" id="schedule-enabled">
+          <span>Enable automatic scraping</span>
+        </label>
+        <div class="schedule-fields" id="schedule-fields">
+          <div class="schedule-row">
+            <label class="schedule-label">Run every</label>
+            <select id="schedule-interval">
+              <option value="2">2 hours</option>
+              <option value="4">4 hours</option>
+              <option value="6">6 hours</option>
+              <option value="8">8 hours</option>
+            </select>
+          </div>
+          <div class="schedule-row">
+            <label class="schedule-label">Between</label>
+            <select id="schedule-start-hour"></select>
+            <span class="schedule-sep">and</span>
+            <select id="schedule-end-hour"></select>
+            <span class="schedule-tz">NZ time</span>
+          </div>
+          <div class="schedule-preview" id="schedule-preview"></div>
+        </div>
+        <button id="btn-save-schedule" class="btn btn-small btn-primary">Save Schedule</button>
+      </div>
     </div>
   </main>
 
