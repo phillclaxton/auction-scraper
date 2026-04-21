@@ -1,6 +1,6 @@
 name: "Auction Scraper"
 description: "Scrapes Cash Converters NZ and Dollar Dealers NZ for deal listings"
-version: "1.2.0"
+version: "1.2.1"
 slug: "auction-scraper"
 url: "https://github.com/phillclaxton/auction-scraper"
 arch:
@@ -14,7 +14,5 @@ ingress_port: 3456
 panel_icon: "mdi:magnify"
 panel_title: "Auctions"
 homeassistant_api: true
-map:
-  - addon_config:rw
 options: {}
 schema: {}

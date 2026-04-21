@@ -1,5 +1,13 @@
 const path = require('path');
 
+// When running as an HA add-on, SUPERVISOR_TOKEN is injected and /data is the
+// Supervisor-managed persistent directory (survives updates). Fall back to a
+// local ./data folder for standalone Docker use.
+const isHA = !!process.env.SUPERVISOR_TOKEN;
+const defaultDbPath = isHA
+  ? '/data/auctions.db'
+  : path.join(__dirname, '..', 'data', 'auctions.db');
+
 module.exports = {
   BASE_URL: 'https://shop.cashconverters.co.nz',
 
@@ -14,7 +22,7 @@ module.exports = {
 
   REQUEST_DELAY_MS: 1000,
 
-  DB_PATH: process.env.DB_PATH || path.join(__dirname, '..', 'data', 'auctions.db'),
+  DB_PATH: process.env.DB_PATH || defaultDbPath,
 
   PORT: process.env.PORT || 3456,
 
