@@ -106,6 +106,28 @@
         </div>
         <button id="btn-save-schedule" class="btn btn-small btn-primary">Save Schedule</button>
       </div>
+
+      <div class="settings-divider"></div>
+
+      <h3>Home Assistant Notifications</h3>
+      <div class="notify-config">
+        <label class="schedule-enable-row">
+          <input type="checkbox" id="notify-enabled">
+          <span>Send HA notification when new items found</span>
+        </label>
+        <div class="notify-fields" id="notify-fields">
+          <div class="schedule-row">
+            <label class="schedule-label">Service</label>
+            <input type="text" id="notify-service" placeholder="persistent_notification" />
+          </div>
+          <p class="notify-hint">
+            Use <code>persistent_notification</code> for the HA notification bell, or your mobile app
+            service name (e.g. <code>mobile_app_iphone</code>). Find yours in
+            HA &rarr; Developer Tools &rarr; Services &rarr; search "notify".
+          </p>
+        </div>
+        <button id="btn-save-notify" class="btn btn-small btn-primary">Save</button>
+      </div>
     </div>
   </main>
 

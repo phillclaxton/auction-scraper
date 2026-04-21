@@ -797,6 +797,50 @@ footer {
   color: var(--text-muted);
 }
 
+/* --- Notify Config --- */
+.notify-config {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notify-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 23px;
+}
+
+.notify-fields.hidden {
+  display: none;
+}
+
+.notify-fields input[type="text"] {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  width: 260px;
+}
+
+.notify-hint {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.notify-hint code {
+  background: var(--border);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.78rem;
+  color: var(--accent);
+}
+
 /* --- Responsive --- */
 @media (max-width: 640px) {
   .header-top {

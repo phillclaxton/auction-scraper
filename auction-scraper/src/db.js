@@ -567,6 +567,27 @@ function setScheduleConfig({ enabled, intervalHours, startHour, endHour }) {
   })();
 }
 
+function getNotifyConfig() {
+  const d = getDb();
+  const rows = d.prepare(
+    "SELECT key, value FROM app_settings WHERE key IN ('notify_enabled','notify_service')"
+  ).all();
+  const map = Object.fromEntries(rows.map(r => [r.key, r.value]));
+  return {
+    enabled: map.notify_enabled !== undefined ? map.notify_enabled === '1' : false,
+    service: map.notify_service || 'persistent_notification',
+  };
+}
+
+function setNotifyConfig({ enabled, service }) {
+  const d = getDb();
+  const upsert = d.prepare('INSERT OR REPLACE INTO app_settings (key, value) VALUES (?, ?)');
+  d.transaction(() => {
+    upsert.run('notify_enabled', enabled ? '1' : '0');
+    upsert.run('notify_service', service || 'persistent_notification');
+  })();
+}
+
 module.exports = {
   init,
   getDb,
@@ -610,4 +631,6 @@ module.exports = {
   ddMarkStaleListings,
   getScheduleConfig,
   setScheduleConfig,
+  getNotifyConfig,
+  setNotifyConfig,
 };

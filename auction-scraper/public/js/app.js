@@ -36,6 +36,9 @@
   // Schedule state
   let scheduleConfig = { enabled: true, intervalHours: 4, startHour: 6, endHour: 20 };
 
+  // Notify state
+  let notifyConfig = { enabled: false, service: 'persistent_notification' };
+
   // DOM refs
   const btnScrape = document.getElementById('btn-scrape');
   const btnAbort = document.getElementById('btn-abort');
@@ -66,6 +69,10 @@
   const scheduleFields = document.getElementById('schedule-fields');
   const schedulePreview = document.getElementById('schedule-preview');
   const btnSaveSchedule = document.getElementById('btn-save-schedule');
+  const notifyEnabledCb = document.getElementById('notify-enabled');
+  const notifyServiceInput = document.getElementById('notify-service');
+  const notifyFields = document.getElementById('notify-fields');
+  const btnSaveNotify = document.getElementById('btn-save-notify');
 
   // --- Init ---
   async function init() {
@@ -107,6 +114,8 @@
       el.addEventListener('change', updateSchedulePreview);
     });
     btnSaveSchedule.addEventListener('click', saveSchedule);
+    notifyEnabledCb.addEventListener('change', updateNotifyFieldsVisibility);
+    btnSaveNotify.addEventListener('click', saveNotify);
 
     sourceTabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -168,6 +177,10 @@
       if (data.schedule) {
         scheduleConfig = data.schedule;
         applyScheduleToUI(scheduleConfig);
+      }
+      if (data.notify) {
+        notifyConfig = data.notify;
+        applyNotifyToUI(notifyConfig);
       }
     } catch (err) {
       console.error('Failed to fetch config:', err);
@@ -418,6 +431,39 @@
       console.error('Failed to save schedule:', err);
     } finally {
       btnSaveSchedule.disabled = false;
+    }
+  }
+
+  function applyNotifyToUI(cfg) {
+    notifyEnabledCb.checked = cfg.enabled;
+    notifyServiceInput.value = cfg.service || 'persistent_notification';
+    updateNotifyFieldsVisibility();
+  }
+
+  function updateNotifyFieldsVisibility() {
+    notifyFields.classList.toggle('hidden', !notifyEnabledCb.checked);
+  }
+
+  async function saveNotify() {
+    const enabled = notifyEnabledCb.checked;
+    const service = notifyServiceInput.value.trim() || 'persistent_notification';
+    try {
+      btnSaveNotify.disabled = true;
+      const res = await fetch('api/config/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled, service }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        notifyConfig = data.notify;
+        btnSaveNotify.textContent = 'Saved!';
+        setTimeout(() => { btnSaveNotify.textContent = 'Save'; }, 1500);
+      }
+    } catch (err) {
+      console.error('Failed to save notify config:', err);
+    } finally {
+      btnSaveNotify.disabled = false;
     }
   }
 

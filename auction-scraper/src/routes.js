@@ -3,6 +3,7 @@ const cron = require('node-cron');
 const db = require('./db');
 const Scraper = require('./scraper');
 const DDScraper = require('./dd-scraper');
+const { notifyScrapeComplete } = require('./notifier');
 
 const router = express.Router();
 const scraper = new Scraper();
@@ -31,14 +32,24 @@ function broadcast(event, data) {
 scraper.on('start', data => broadcast('start', { ...data, source: 'cc' }));
 scraper.on('progress', data => broadcast('progress', { ...data, source: 'cc' }));
 scraper.on('listing', data => broadcast('listing', { ...data, source: 'cc' }));
-scraper.on('complete', data => broadcast('complete', { ...data, source: 'cc' }));
+scraper.on('complete', data => {
+  const eventData = { ...data, source: 'cc' };
+  broadcast('complete', eventData);
+  const { enabled, service } = db.getNotifyConfig();
+  if (enabled) notifyScrapeComplete({ ...eventData, service });
+});
 scraper.on('error', data => broadcast('error', { ...data, source: 'cc' }));
 
 // DD scraper events
 ddScraper.on('start', data => broadcast('start', { ...data, source: 'dd' }));
 ddScraper.on('progress', data => broadcast('progress', { ...data, source: 'dd' }));
 ddScraper.on('listing', data => broadcast('listing', { ...data, source: 'dd' }));
-ddScraper.on('complete', data => broadcast('complete', { ...data, source: 'dd' }));
+ddScraper.on('complete', data => {
+  const eventData = { ...data, source: 'dd' };
+  broadcast('complete', eventData);
+  const { enabled, service } = db.getNotifyConfig();
+  if (enabled) notifyScrapeComplete({ ...eventData, service });
+});
 ddScraper.on('error', data => broadcast('error', { ...data, source: 'dd' }));
 
 // --- Scheduled scraping ---
@@ -200,6 +211,7 @@ router.get('/api/config', (req, res) => {
     lastRun: db.getLastScrapeRun() || null,
     ddLastRun: db.ddGetLastScrapeRun() || null,
     schedule: db.getScheduleConfig(),
+    notify: db.getNotifyConfig(),
   });
 });
 
@@ -232,6 +244,17 @@ router.post('/api/config/schedule', express.json(), (req, res) => {
   db.setScheduleConfig({ enabled, intervalHours, startHour, endHour });
   setupSchedule();
   res.json({ ok: true, schedule: db.getScheduleConfig() });
+});
+
+router.post('/api/config/notify', express.json(), (req, res) => {
+  const { enabled, service } = req.body;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled (boolean) is required' });
+  }
+  const cleanService = (service || 'persistent_notification').trim().replace(/[^a-zA-Z0-9_]/g, '');
+  if (!cleanService) return res.status(400).json({ error: 'service name is invalid' });
+  db.setNotifyConfig({ enabled, service: cleanService });
+  res.json({ ok: true, notify: db.getNotifyConfig() });
 });
 
 router.get('/api/scrape/log', (req, res) => {

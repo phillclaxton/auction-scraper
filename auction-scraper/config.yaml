@@ -13,6 +13,7 @@ ingress: true
 ingress_port: 3456
 panel_icon: "mdi:magnify"
 panel_title: "Auctions"
+homeassistant_api: true
 map:
   - addon_config:rw
 options: {}
