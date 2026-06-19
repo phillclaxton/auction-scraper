@@ -26,7 +26,8 @@ function init() {
       last_seen_at TEXT DEFAULT (datetime('now')),
       is_new INTEGER DEFAULT 1,
       is_hidden INTEGER DEFAULT 0,
-      status TEXT DEFAULT 'active'
+      status TEXT DEFAULT 'active',
+      price_override INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS scrape_runs (
@@ -63,7 +64,8 @@ function init() {
       is_new INTEGER DEFAULT 1,
       is_hidden INTEGER DEFAULT 0,
       status TEXT DEFAULT 'active',
-      manually_added INTEGER DEFAULT 0
+      manually_added INTEGER DEFAULT 0,
+      price_override INTEGER DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS dd_scrape_runs (
@@ -101,6 +103,9 @@ function init() {
   // Migrate: add trigger_type column to scrape_runs if missing
   try { db.exec("ALTER TABLE scrape_runs ADD COLUMN trigger_type TEXT DEFAULT 'manual'"); } catch {}
   try { db.exec("ALTER TABLE dd_scrape_runs ADD COLUMN trigger_type TEXT DEFAULT 'manual'"); } catch {}
+  // Migrate: add price_override column (user override of the price filter) if missing
+  try { db.exec('ALTER TABLE listings ADD COLUMN price_override INTEGER DEFAULT 0'); } catch {}
+  try { db.exec('ALTER TABLE dd_listings ADD COLUMN price_override INTEGER DEFAULT 0'); } catch {}
 
   // Seed default search terms if table is empty
   const count = db.prepare('SELECT COUNT(*) as c FROM search_terms').get();
@@ -119,10 +124,10 @@ function getDb() {
   return db;
 }
 
-// Returns { isNew, relisted, isHidden, manuallyAdded }
+// Returns { isNew, relisted, isHidden, manuallyAdded, priceOverride }
 function upsertListing(listing) {
   const d = getDb();
-  const existing = d.prepare('SELECT id, status, is_hidden, manually_added, search_term FROM listings WHERE id = ?').get(listing.id);
+  const existing = d.prepare('SELECT id, status, is_hidden, manually_added, price_override, search_term FROM listings WHERE id = ?').get(listing.id);
 
   if (existing) {
     const relisted = existing.status === 'ended';
@@ -146,7 +151,7 @@ function upsertListing(listing) {
       listing.buy_now_price, listing.remaining_time, listing.end_date, listing.bids,
       searchTerm, newHidden, isManual ? 1 : 0, listing.id
     );
-    return { isNew: false, relisted, isHidden: newHidden > 0, manuallyAdded: isManual };
+    return { isNew: false, relisted, isHidden: newHidden > 0, manuallyAdded: isManual, priceOverride: existing.price_override === 1 };
   }
 
   d.prepare(`
@@ -158,7 +163,7 @@ function upsertListing(listing) {
     listing.bid_increment, listing.buy_now_price, listing.remaining_time,
     listing.end_date, listing.bids, listing.search_term, listing.manually_added ? 1 : 0
   );
-  return { isNew: true, relisted: false, isHidden: false, manuallyAdded: !!listing.manually_added };
+  return { isNew: true, relisted: false, isHidden: false, manuallyAdded: !!listing.manually_added, priceOverride: false };
 }
 
 function getAllListings({ sort = 'buy_now_price', direction = 'ASC', filterNew = false, showHidden = false } = {}) {
@@ -205,6 +210,16 @@ function hideListingByPrice(id) {
 
 function unhideListing(id) {
   getDb().prepare('UPDATE listings SET is_hidden = 0 WHERE id = ?').run(id);
+}
+
+// price_override = 1 keeps an item visible even when it exceeds the price limit.
+// Enabling clears the price-auto-hidden state; disabling lets the filter re-apply.
+function setPriceOverride(id, enabled) {
+  if (enabled) {
+    getDb().prepare('UPDATE listings SET is_hidden = 0, price_override = 1 WHERE id = ?').run(id);
+  } else {
+    getDb().prepare('UPDATE listings SET price_override = 0 WHERE id = ?').run(id);
+  }
 }
 
 function getHiddenCount() {
@@ -337,9 +352,9 @@ function applyMaxPriceFilters() {
   }
 
   // --- Hide pass: hide visible items that exceed all matching terms' limits ---
-  // Exclude manually added items — user explicitly added them, they should always show
+  // Exclude manually added items and price overrides — user explicitly wants those shown
   if (terms.length === 0) return 0;
-  const listings = d.prepare("SELECT id, search_term, buy_now_price, current_price FROM listings WHERE status = 'active' AND is_hidden = 0 AND manually_added = 0").all();
+  const listings = d.prepare("SELECT id, search_term, buy_now_price, current_price FROM listings WHERE status = 'active' AND is_hidden = 0 AND manually_added = 0 AND price_override = 0").all();
   const toHide = [];
   for (const row of listings) {
     if (!row.search_term) continue;
@@ -372,7 +387,7 @@ function markStaleListings(activeIds) {
 
 function ddUpsertListing(listing) {
   const d = getDb();
-  const existing = d.prepare('SELECT id, status, is_hidden, manually_added, search_term FROM dd_listings WHERE id = ?').get(listing.id);
+  const existing = d.prepare('SELECT id, status, is_hidden, manually_added, price_override, search_term FROM dd_listings WHERE id = ?').get(listing.id);
 
   if (existing) {
     const relisted = existing.status === 'ended';
@@ -389,7 +404,7 @@ function ddUpsertListing(listing) {
       listing.title, listing.image_url, listing.price,
       searchTerm, newHidden, isManual ? 1 : 0, listing.id
     );
-    return { isNew: false, relisted, isHidden: newHidden > 0, manuallyAdded: isManual };
+    return { isNew: false, relisted, isHidden: newHidden > 0, manuallyAdded: isManual, priceOverride: existing.price_override === 1 };
   }
 
   d.prepare(`
@@ -399,7 +414,7 @@ function ddUpsertListing(listing) {
     listing.id, listing.url, listing.title, listing.image_url, listing.price,
     listing.search_term, listing.manually_added ? 1 : 0
   );
-  return { isNew: true, relisted: false, isHidden: false, manuallyAdded: !!listing.manually_added };
+  return { isNew: true, relisted: false, isHidden: false, manuallyAdded: !!listing.manually_added, priceOverride: false };
 }
 
 function ddGetAllListings({ sort = 'price', direction = 'ASC', filterNew = false, showHidden = false } = {}) {
@@ -445,6 +460,14 @@ function ddHideListingByPrice(id) {
 
 function ddUnhideListing(id) {
   getDb().prepare('UPDATE dd_listings SET is_hidden = 0 WHERE id = ?').run(id);
+}
+
+function ddSetPriceOverride(id, enabled) {
+  if (enabled) {
+    getDb().prepare('UPDATE dd_listings SET is_hidden = 0, price_override = 1 WHERE id = ?').run(id);
+  } else {
+    getDb().prepare('UPDATE dd_listings SET price_override = 0 WHERE id = ?').run(id);
+  }
 }
 
 function ddGetHiddenCount() {
@@ -513,7 +536,7 @@ function ddApplyMaxPriceFilters() {
 
   // Hide pass
   if (terms.length === 0) return 0;
-  const listings = d.prepare("SELECT id, search_term, price FROM dd_listings WHERE status = 'active' AND is_hidden = 0 AND manually_added = 0").all();
+  const listings = d.prepare("SELECT id, search_term, price FROM dd_listings WHERE status = 'active' AND is_hidden = 0 AND manually_added = 0 AND price_override = 0").all();
   const toHide = [];
   for (const row of listings) {
     if (!row.search_term) continue;
@@ -599,6 +622,7 @@ module.exports = {
   hideListing,
   hideListingByPrice,
   unhideListing,
+  setPriceOverride,
   getHiddenCount,
   getHiddenIds,
   createScrapeRun,
@@ -621,6 +645,7 @@ module.exports = {
   ddHideListing,
   ddHideListingByPrice,
   ddUnhideListing,
+  ddSetPriceOverride,
   ddGetHiddenCount,
   ddGetHiddenIds,
   ddCreateScrapeRun,

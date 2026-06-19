@@ -205,6 +205,15 @@ router.post('/api/listings/:id/unhide', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/api/listings/:id/price-override', express.json(), (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const source = req.query.source || 'cc';
+  if (isNaN(id)) return res.status(400).json({ error: 'Invalid id' });
+  const enabled = req.body && req.body.enabled !== false; // default true
+  source === 'dd' ? db.ddSetPriceOverride(id, enabled) : db.setPriceOverride(id, enabled);
+  res.json({ ok: true });
+});
+
 router.get('/api/config', (req, res) => {
   res.json({
     searchTerms: db.getSearchTerms(),

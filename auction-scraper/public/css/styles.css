@@ -469,6 +469,20 @@ main {
   50% { opacity: 0.7; }
 }
 
+.override-tag {
+  background: rgba(251, 191, 36, 0.15);
+  color: var(--yellow);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .card-prices {
   display: grid;
   grid-template-columns: 1fr 1fr;

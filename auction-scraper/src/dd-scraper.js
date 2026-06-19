@@ -204,6 +204,7 @@ class DDScraper extends EventEmitter {
       const hiddenIds = db.ddGetHiddenIds();
       const activeIds = [];
       let skippedCount = 0;
+      let newVisibleCount = 0;
 
       for (const [id, product] of productMap) {
         if (this.aborted) break;
@@ -218,14 +219,14 @@ class DDScraper extends EventEmitter {
           search_term: terms.join(', '),
         };
 
-        const { isNew, relisted, isHidden: alreadyHidden, manuallyAdded } = db.ddUpsertListing(listing);
+        const { isNew, relisted, isHidden: alreadyHidden, manuallyAdded, priceOverride } = db.ddUpsertListing(listing);
         if (isNew) newCount++;
         activeIds.push(id);
         totalFound++;
 
         // Auto-hide if price exceeds max
         let autoHidden = false;
-        if (!alreadyHidden && !manuallyAdded && product.price != null) {
+        if (!alreadyHidden && !manuallyAdded && !priceOverride && product.price != null) {
           const allTermsHaveLimits = terms.every(t => maxPriceMap.get(t) != null);
           if (allTermsHaveLimits) {
             const exceedsAll = terms.every(t => product.price > maxPriceMap.get(t));
@@ -238,6 +239,7 @@ class DDScraper extends EventEmitter {
         }
 
         if (!autoHidden && !alreadyHidden && !hiddenIds.has(id)) {
+          if (isNew) newVisibleCount++;
           this.emit('listing', { ...listing, is_new: isNew ? 1 : 0, first_seen_at: new Date().toISOString() });
         }
       }
@@ -258,6 +260,7 @@ class DDScraper extends EventEmitter {
       this.emit('complete', {
         totalFound,
         newCount,
+        newVisibleCount,
         skippedCount,
         aborted: this.aborted,
       });

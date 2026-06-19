@@ -37,23 +37,24 @@ function sendHANotification({ service, title, message }) {
 
 /**
  * Build and send a scrape-complete notification.
- * Only fires when newCount > 0, notifications are enabled, and scrape wasn't aborted.
+ * Fires only for new items that are actually visible — i.e. new AND not hidden
+ * by the price filter. Skips aborted runs and runs with no new visible items.
  *
  * @param {object} opts
- * @param {number} opts.newCount    - Number of new listings found
- * @param {number} opts.totalFound  - Total listings found this run
- * @param {string} opts.source      - 'cc' or 'dd'
- * @param {boolean} opts.aborted    - Whether the scrape was aborted
- * @param {string}  opts.service    - HA notify service name
+ * @param {number} opts.newVisibleCount - New listings that passed the price filter
+ * @param {number} opts.totalFound      - Total listings found this run
+ * @param {string} opts.source          - 'cc' or 'dd'
+ * @param {boolean} opts.aborted        - Whether the scrape was aborted
+ * @param {string}  opts.service        - HA notify service name
  */
-function notifyScrapeComplete({ newCount, totalFound, source, aborted, service }) {
-  if (aborted || newCount === 0) return;
+function notifyScrapeComplete({ newVisibleCount, totalFound, source, aborted, service }) {
+  if (aborted || !newVisibleCount) return;
 
   const sourceName = source === 'dd' ? 'Dollar Dealers' : 'Cash Converters';
   sendHANotification({
     service,
-    title: `Auction Scraper — ${newCount} new listing${newCount > 1 ? 's' : ''}`,
-    message: `${newCount} new item${newCount > 1 ? 's' : ''} found on ${sourceName} (${totalFound} total). Open the Auction Scraper panel to view them.`,
+    title: `Auction Scraper — ${newVisibleCount} new listing${newVisibleCount > 1 ? 's' : ''}`,
+    message: `${newVisibleCount} new item${newVisibleCount > 1 ? 's' : ''} found on ${sourceName} (${totalFound} total). Open the Auction Scraper panel to view them.`,
   });
 }
 

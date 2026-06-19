@@ -246,6 +246,7 @@ class Scraper extends EventEmitter {
       // so markStaleListings doesn't purge them
       const activeIds = [...hiddenInResults];
       let skippedCount = 0;
+      let newVisibleCount = 0;
 
       for (let i = 0; i < allIds.length; i++) {
         if (this.aborted) break;
@@ -264,7 +265,7 @@ class Scraper extends EventEmitter {
           const html = await this.fetchWithRetry(url);
           const listing = parseListingHtml(html, id, url, terms.join(', '));
 
-          const { isNew, relisted, isHidden: alreadyHidden, manuallyAdded } = db.upsertListing(listing);
+          const { isNew, relisted, isHidden: alreadyHidden, manuallyAdded, priceOverride } = db.upsertListing(listing);
           if (isNew) newCount++;
           activeIds.push(id);
           totalFound++;
@@ -283,7 +284,7 @@ class Scraper extends EventEmitter {
           // Check buy_now_price first; if absent, fall back to current_price
           // Skip if already manually hidden or manually added — don't override user's choice
           let autoHidden = false;
-          if (!alreadyHidden && !manuallyAdded) {
+          if (!alreadyHidden && !manuallyAdded && !priceOverride) {
             const allTermsHaveLimits = terms.every(t => maxPriceMap.get(t) != null);
             const priceToCheck = (listing.buy_now_price != null && listing.buy_now_price > 0) ? listing.buy_now_price : listing.current_price;
             if (allTermsHaveLimits && priceToCheck != null) {
@@ -304,6 +305,7 @@ class Scraper extends EventEmitter {
           }
 
           if (!autoHidden && !alreadyHidden) {
+            if (isNew) newVisibleCount++;
             this.emit('listing', { ...listing, is_new: isNew ? 1 : 0, first_seen_at: new Date().toISOString() });
           }
         } catch (err) {
@@ -323,6 +325,7 @@ class Scraper extends EventEmitter {
       this.emit('complete', {
         totalFound,
         newCount,
+        newVisibleCount,
         skippedCount,
         aborted: this.aborted,
       });

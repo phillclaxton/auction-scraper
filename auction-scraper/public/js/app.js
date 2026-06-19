@@ -259,6 +259,21 @@
     }
   }
 
+  // enabled=true keeps an over-limit item visible; enabled=false re-applies the price filter
+  async function setPriceOverride(id, enabled, e) {
+    e.stopPropagation();
+    try {
+      await fetch(`api/listings/${id}/price-override?source=${currentSource}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+      });
+      await fetchListings();
+    } catch (err) {
+      console.error('Failed to set price override:', err);
+    }
+  }
+
   async function addTerm() {
     const term = newTermInput.value.trim();
     if (!term) return;
@@ -520,7 +535,8 @@
       updateScrapingUI();
 
       if (data.source === currentSource) {
-        let msg = `Done! Found ${data.totalFound} listings (${data.newCount} new)`;
+        const newVisible = data.newVisibleCount != null ? data.newVisibleCount : data.newCount;
+        let msg = `Done! Found ${data.totalFound} listings (${newVisible} new)`;
         if (data.skippedCount) msg += `, ${data.skippedCount} filtered by price`;
         progressText.textContent = msg;
         setTimeout(() => {
@@ -658,10 +674,18 @@
 
     let actionsHtml = '';
     if (isHiddenView) {
-      actionsHtml = `<button class="btn-card-action unhide-btn" data-id="${l.id}" title="Unhide">Show</button>`;
+      if (l.is_hidden === 2) {
+        // Auto-hidden by the price filter — let the user keep it despite the limit
+        actionsHtml = `<button class="btn-card-action keep-btn" data-id="${l.id}" title="Keep visible despite the price limit">Keep visible</button>`;
+      } else {
+        actionsHtml = `<button class="btn-card-action unhide-btn" data-id="${l.id}" title="Unhide">Show</button>`;
+      }
     } else {
       if (l.is_new) {
         actionsHtml += `<button class="btn-card-action" data-action="dismiss" data-id="${l.id}" title="Mark as seen">Dismiss</button>`;
+      }
+      if (l.price_override) {
+        actionsHtml += `<button class="btn-card-action refilter-btn" data-id="${l.id}" title="Re-apply the price filter to this item">Re-filter</button>`;
       }
       actionsHtml += `<button class="btn-card-action hide-btn" data-action="hide" data-id="${l.id}" title="Hide this listing">Hide</button>`;
     }
@@ -718,6 +742,7 @@
       <div class="card-body">
         <div class="card-header">
           <span class="card-title">${esc(l.title)}</span>
+          ${l.price_override ? '<span class="override-tag" title="Kept visible despite the price limit">Over limit</span>' : ''}
           ${l.is_new ? '<span class="new-tag">New</span>' : ''}
         </div>
         ${pricesHtml}
@@ -745,6 +770,14 @@
     const unhideBtn = card.querySelector('.unhide-btn');
     if (unhideBtn) {
       unhideBtn.addEventListener('click', (e) => unhideListing(parseInt(unhideBtn.dataset.id, 10), e));
+    }
+    const keepBtn = card.querySelector('.keep-btn');
+    if (keepBtn) {
+      keepBtn.addEventListener('click', (e) => setPriceOverride(parseInt(keepBtn.dataset.id, 10), true, e));
+    }
+    const refilterBtn = card.querySelector('.refilter-btn');
+    if (refilterBtn) {
+      refilterBtn.addEventListener('click', (e) => setPriceOverride(parseInt(refilterBtn.dataset.id, 10), false, e));
     }
 
     return card;
