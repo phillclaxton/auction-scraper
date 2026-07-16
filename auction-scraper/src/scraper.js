@@ -227,6 +227,15 @@ class Scraper extends EventEmitter {
         await delay(config.REQUEST_DELAY_MS);
       }
 
+      // Also refresh manually added listings — they don't show up in search-term
+      // results, so without this their prices/end dates go stale and finished
+      // ones are never removed.
+      for (const m of db.getManuallyAddedListings()) {
+        if (!listingMap.has(m.id)) {
+          listingMap.set(m.id, { url: m.url, searchTerms: ['manual'] });
+        }
+      }
+
       // Phase 2: Fetch each unique listing detail page, skipping hidden ones
       const hiddenIds = db.getHiddenIds();
       const allIdsRaw = Array.from(listingMap.keys());

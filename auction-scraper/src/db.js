@@ -386,6 +386,13 @@ function markEnded(id) {
   getDb().prepare("UPDATE listings SET status = 'ended' WHERE id = ?").run(id);
 }
 
+// Active, manually added listings — these don't appear in search-term results,
+// so the scraper must refresh them explicitly to update prices/end dates and
+// remove finished ones.
+function getManuallyAddedListings() {
+  return getDb().prepare("SELECT id, url FROM listings WHERE manually_added = 1 AND status = 'active' AND is_hidden = 0").all();
+}
+
 // ========================
 // Dollar Dealers functions
 // ========================
@@ -642,6 +649,7 @@ module.exports = {
   applyMaxPriceFilters,
   markStaleListings,
   markEnded,
+  getManuallyAddedListings,
   // Dollar Dealers
   ddUpsertListing,
   ddGetAllListings,
