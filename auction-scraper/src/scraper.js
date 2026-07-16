@@ -42,6 +42,15 @@ function parseListingHtml(html, id, url, searchTerm) {
   const endDate = endDateEl.attr('data-action-time') || endDateEl.text().trim() || null;
   const bids = parseInt($(config.SELECTORS.BIDS_COUNT).first().text().trim(), 10) || 0;
 
+  // Detect a finished auction (e.g. sold via Buy Now, or bidding ended). The
+  // status label is server-rendered: "Active"/"Preview" while live, and
+  // "Successful"/"Unsold"/"Closed"/"Ended" once finished. As a backup, the
+  // "Bidding has ended" banner loses its `awe-hidden` class when the listing closes.
+  const statusLabel = $(config.SELECTORS.STATUS_LABEL).first().text().trim().toLowerCase();
+  const closedMsgEl = $(config.SELECTORS.CLOSED_MESSAGE).first();
+  const closedVisible = closedMsgEl.length > 0 && !((closedMsgEl.attr('class') || '').includes('awe-hidden'));
+  const ended = config.ENDED_STATUSES.includes(statusLabel) || closedVisible;
+
   let imageUrl = null;
   const imgEl = $(config.SELECTORS.IMAGE).first();
   if (imgEl.length) {
@@ -56,7 +65,7 @@ function parseListingHtml(html, id, url, searchTerm) {
     id, url, title, image_url: imageUrl,
     current_price: currentPrice, min_bid: minBid, bid_increment: bidIncrement,
     buy_now_price: buyNowPrice, remaining_time: remainingTime, end_date: endDate,
-    bids, search_term: searchTerm,
+    bids, search_term: searchTerm, ended,
   };
 }
 
@@ -266,6 +275,21 @@ class Scraper extends EventEmitter {
           const listing = parseListingHtml(html, id, url, terms.join(', '));
 
           const { isNew, relisted, isHidden: alreadyHidden, manuallyAdded, priceOverride } = db.upsertListing(listing);
+
+          // Auction finished (sold/closed) — mark ended and remove from the list
+          if (listing.ended) {
+            db.markEnded(id);
+            this.emit('progress', {
+              phase: 'details',
+              message: `Ended, removed "${listing.title}"`,
+              current: i + 1,
+              total,
+              percent: Math.round(((i + 1) / total) * 100),
+            });
+            await delay(config.REQUEST_DELAY_MS);
+            continue;
+          }
+
           if (isNew) newCount++;
           activeIds.push(id);
           totalFound++;
@@ -357,3 +381,4 @@ class Scraper extends EventEmitter {
 }
 
 module.exports = Scraper;
+module.exports.parseListingHtml = parseListingHtml;

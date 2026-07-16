@@ -381,6 +381,11 @@ function markStaleListings(activeIds) {
   d.prepare(`UPDATE listings SET status = 'ended' WHERE status = 'active' AND manually_added = 0 AND id NOT IN (${placeholders})`).run(...activeIds);
 }
 
+// Mark a single listing ended (e.g. auction finished / sold while still in results)
+function markEnded(id) {
+  getDb().prepare("UPDATE listings SET status = 'ended' WHERE id = ?").run(id);
+}
+
 // ========================
 // Dollar Dealers functions
 // ========================
@@ -636,6 +641,7 @@ module.exports = {
   cleanupHiddenListings,
   applyMaxPriceFilters,
   markStaleListings,
+  markEnded,
   // Dollar Dealers
   ddUpsertListing,
   ddGetAllListings,

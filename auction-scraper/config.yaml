@@ -1,6 +1,6 @@
 name: "Auction Scraper"
 description: "Scrapes Cash Converters NZ and Dollar Dealers NZ for deal listings"
-version: "1.3.0"
+version: "1.4.0"
 slug: "auction-scraper"
 url: "https://github.com/phillclaxton/auction-scraper"
 arch:

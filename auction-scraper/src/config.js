@@ -39,7 +39,13 @@ module.exports = {
     BIDS_COUNT: '.awe-rt-AcceptedListingActionCount',
     REMAINING_TIME: 'small[data-epoch="ending"]',
     IMAGE: 'img#previewimg',
+    STATUS_LABEL: '.awe-rt-ColoredStatus .label',
+    CLOSED_MESSAGE: '.awe-rt-ListingClosedMessage',
   },
+
+  // Server-rendered status label values that mean the auction has finished.
+  // "active" and "preview" mean the listing is still live/upcoming.
+  ENDED_STATUSES: ['successful', 'unsold', 'closed', 'ended'],
 
   LISTING_ID_PATTERN: /\/Listing\/Details\/(\d+)/,
 };
