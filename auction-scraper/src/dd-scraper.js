@@ -2,6 +2,7 @@ const EventEmitter = require('events');
 const cheerio = require('cheerio');
 const config = require('./config');
 const db = require('./db');
+const { log, describeError } = require('./log');
 
 const fetchPage = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
 
@@ -32,6 +33,8 @@ class DDScraper extends EventEmitter {
     super();
     this.running = false;
     this.aborted = false;
+    // See Scraper: an unhandled 'error' event would crash the add-on process.
+    this.on('error', () => {});
   }
 
   abort() {
@@ -39,7 +42,9 @@ class DDScraper extends EventEmitter {
   }
 
   async fetchWithRetry(url, retries = 2) {
-    for (let i = 0; i <= retries; i++) {
+    const attempts = retries + 1;
+    for (let i = 0; i < attempts; i++) {
+      const started = Date.now();
       try {
         const response = await fetchPage(url, {
           headers: {
@@ -47,12 +52,27 @@ class DDScraper extends EventEmitter {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-NZ,en;q=0.9',
           },
+          signal: AbortSignal.timeout(config.REQUEST_TIMEOUT_MS),
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const ms = Date.now() - started;
+
+        if (!response.ok) {
+          const err = new Error(`HTTP ${response.status}${response.statusText ? ' ' + response.statusText : ''}`);
+          err.status = response.status;
+          throw err;
+        }
+
         const html = await response.text();
+        log.debug('dd', `GET ${url} -> ${response.status} (${html.length} bytes, ${ms}ms)`);
         return { html, finalUrl: response.url };
       } catch (err) {
-        if (i === retries) throw err;
+        const ms = Date.now() - started;
+        const attempt = `attempt ${i + 1}/${attempts}`;
+        if (i === attempts - 1) {
+          log.error('dd', `GET ${url} failed on ${attempt} after ${ms}ms: ${describeError(err)}`);
+          throw err;
+        }
+        log.warn('dd', `GET ${url} failed on ${attempt} after ${ms}ms: ${describeError(err)} — retrying`);
         await delay(1000);
       }
     }
@@ -79,9 +99,11 @@ class DDScraper extends EventEmitter {
 
     try {
       this.emit('start', { runId });
+      log.info('dd', `Scrape #${runId} started (${triggerType}) with ${searchTermEntries.length} search term(s)`);
 
       // Collect products from search results (with pagination)
       const productMap = new Map(); // id -> { url, title, image_url, price, searchTerms[] }
+      const failedTerms = [];
 
       for (let si = 0; si < searchTermEntries.length; si++) {
         if (this.aborted) break;
@@ -194,10 +216,17 @@ class DDScraper extends EventEmitter {
             count: termCount,
           });
         } catch (err) {
-          this.emit('error', { message: `Error searching DD "${term}": ${err.message}`, searchTerm: term });
+          failedTerms.push(term);
+          const detail = describeError(err);
+          log.error('dd', `Search for "${term}" failed: ${detail}`);
+          this.emit('error', { message: `Error searching DD "${term}": ${detail}`, searchTerm: term });
         }
 
         await delay(config.REQUEST_DELAY_MS);
+      }
+
+      if (failedTerms.length > 0) {
+        log.warn('dd', `${failedTerms.length}/${searchTermEntries.length} search term(s) failed: ${failedTerms.join(', ')}`);
       }
 
       // Upsert all products and apply price filters
@@ -251,22 +280,43 @@ class DDScraper extends EventEmitter {
         }
       }
 
-      if (!this.aborted && activeIds.length > 0) {
+      // Skipped when any search term failed — otherwise a network failure would
+      // wrongly mark healthy listings as ended.
+      if (this.aborted) {
+        log.info('dd', 'Aborted — skipping stale-listing cleanup');
+      } else if (failedTerms.length > 0) {
+        log.warn('dd', `Skipping stale-listing cleanup — ${failedTerms.length} search term(s) failed this run`);
+      } else if (activeIds.length > 0) {
         db.ddMarkStaleListings(activeIds);
       }
 
-      db.ddCompleteScrapeRun(runId, { totalFound, newCount, status: this.aborted ? 'aborted' : 'completed' });
+      const allTermsFailed = searchTermEntries.length > 0 && failedTerms.length === searchTermEntries.length;
+      let status = 'completed';
+      if (this.aborted) status = 'aborted';
+      else if (allTermsFailed) status = 'error';
+      else if (failedTerms.length > 0) status = 'partial';
+
+      db.ddCompleteScrapeRun(runId, { totalFound, newCount, status });
+
+      log.info('dd', `Scrape #${runId} ${status}: ${totalFound} found, ${newCount} new (${newVisibleCount} visible), ${skippedCount} price-filtered, ${failedTerms.length} term failure(s)`);
+      if (allTermsFailed) {
+        log.error('dd', 'Every search term failed — see the errors above; the site was unreachable or rejected every request');
+      }
 
       this.emit('complete', {
         totalFound,
         newCount,
         newVisibleCount,
         skippedCount,
+        failedTerms,
+        status,
         aborted: this.aborted,
       });
     } catch (err) {
       db.ddCompleteScrapeRun(runId, { totalFound, newCount, status: 'error' });
-      this.emit('error', { message: `DD scrape failed: ${err.message}` });
+      const detail = describeError(err);
+      log.error('dd', `Scrape #${runId} crashed: ${detail}`);
+      this.emit('error', { message: `DD scrape failed: ${detail}` });
     } finally {
       this.running = false;
     }

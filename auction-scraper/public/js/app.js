@@ -536,8 +536,15 @@
 
       if (data.source === currentSource) {
         const newVisible = data.newVisibleCount != null ? data.newVisibleCount : data.newCount;
-        let msg = `Done! Found ${data.totalFound} listings (${newVisible} new)`;
-        if (data.skippedCount) msg += `, ${data.skippedCount} filtered by price`;
+        const failed = (data.failedTerms && data.failedTerms.length) || 0;
+        let msg;
+        if (data.status === 'error') {
+          msg = `Scrape failed — could not reach the site (all ${failed} search term${failed > 1 ? 's' : ''} failed). Check the add-on log.`;
+        } else {
+          msg = `Done! Found ${data.totalFound} listings (${newVisible} new)`;
+          if (data.skippedCount) msg += `, ${data.skippedCount} filtered by price`;
+          if (failed) msg += ` — ${failed} search term${failed > 1 ? 's' : ''} failed: ${data.failedTerms.join(', ')}`;
+        }
         progressText.textContent = msg;
         setTimeout(() => {
           if (!isCurrentSourceRunning()) {

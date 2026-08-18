@@ -2,6 +2,7 @@ const EventEmitter = require('events');
 const cheerio = require('cheerio');
 const config = require('./config');
 const db = require('./db');
+const { log, describeError } = require('./log');
 
 // Node 18 has global fetch, but we need to handle the case where it doesn't
 const fetchPage = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
@@ -74,6 +75,10 @@ class Scraper extends EventEmitter {
     super();
     this.running = false;
     this.aborted = false;
+    // EventEmitter throws ERR_UNHANDLED_ERROR if an 'error' event is emitted
+    // with no listener attached, which would take down the whole add-on
+    // process. Everything is logged anyway, so guarantee a listener exists.
+    this.on('error', () => {});
   }
 
   abort() {
@@ -81,7 +86,9 @@ class Scraper extends EventEmitter {
   }
 
   async fetchWithRetry(url, retries = 2) {
-    for (let i = 0; i <= retries; i++) {
+    const attempts = retries + 1;
+    for (let i = 0; i < attempts; i++) {
+      const started = Date.now();
       try {
         const response = await fetchPage(url, {
           headers: {
@@ -89,11 +96,27 @@ class Scraper extends EventEmitter {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
             'Accept-Language': 'en-NZ,en;q=0.9',
           },
+          signal: AbortSignal.timeout(config.REQUEST_TIMEOUT_MS),
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return await response.text();
+        const ms = Date.now() - started;
+
+        if (!response.ok) {
+          const err = new Error(`HTTP ${response.status}${response.statusText ? ' ' + response.statusText : ''}`);
+          err.status = response.status;
+          throw err;
+        }
+
+        const body = await response.text();
+        log.debug('cc', `GET ${url} -> ${response.status} (${body.length} bytes, ${ms}ms)`);
+        return body;
       } catch (err) {
-        if (i === retries) throw err;
+        const ms = Date.now() - started;
+        const attempt = `attempt ${i + 1}/${attempts}`;
+        if (i === attempts - 1) {
+          log.error('cc', `GET ${url} failed on ${attempt} after ${ms}ms: ${describeError(err)}`);
+          throw err;
+        }
+        log.warn('cc', `GET ${url} failed on ${attempt} after ${ms}ms: ${describeError(err)} — retrying`);
         await delay(1000);
       }
     }
@@ -122,10 +145,12 @@ class Scraper extends EventEmitter {
 
     try {
       this.emit('start', { runId });
+      log.info('cc', `Scrape #${runId} started (${triggerType}) with ${searchTermEntries.length} search term(s)`);
 
       // Phase 1: Collect listing URLs from all search terms (with pagination)
       const listingMap = new Map(); // id -> { url, searchTerms[] }
       const MAX_PAGES = 10; // safety limit
+      const failedTerms = [];
 
       for (let si = 0; si < searchTermEntries.length; si++) {
         if (this.aborted) break;
@@ -221,10 +246,17 @@ class Scraper extends EventEmitter {
             }
           }
         } catch (err) {
-          this.emit('error', { message: `Error searching "${term}": ${err.message}`, searchTerm: term });
+          failedTerms.push(term);
+          const detail = describeError(err);
+          log.error('cc', `Search for "${term}" failed: ${detail}`);
+          this.emit('error', { message: `Error searching "${term}": ${detail}`, searchTerm: term });
         }
 
         await delay(config.REQUEST_DELAY_MS);
+      }
+
+      if (failedTerms.length > 0) {
+        log.warn('cc', `${failedTerms.length}/${searchTermEntries.length} search term(s) failed: ${failedTerms.join(', ')}`);
       }
 
       // Also refresh manually added listings — they don't show up in search-term
@@ -265,6 +297,7 @@ class Scraper extends EventEmitter {
       const activeIds = [...hiddenInResults];
       let skippedCount = 0;
       let newVisibleCount = 0;
+      let detailFailures = 0;
 
       for (let i = 0; i < allIds.length; i++) {
         if (this.aborted) break;
@@ -342,29 +375,58 @@ class Scraper extends EventEmitter {
             this.emit('listing', { ...listing, is_new: isNew ? 1 : 0, first_seen_at: new Date().toISOString() });
           }
         } catch (err) {
-          this.emit('error', { message: `Error scraping listing ${id}: ${err.message}`, url });
+          detailFailures++;
+          const detail = describeError(err);
+          log.error('cc', `Listing ${id} failed: ${detail} (${url})`);
+          this.emit('error', { message: `Error scraping listing ${id}: ${detail}`, url });
         }
 
         await delay(config.REQUEST_DELAY_MS);
       }
 
-      // Mark listings not found in this run as ended
-      if (!this.aborted && activeIds.length > 0) {
+      // Mark listings not found in this run as ended.
+      // Skipped when any search term failed: those listings are missing from
+      // activeIds only because the fetch failed, and purging them would wrongly
+      // remove healthy items during a network/TLS outage.
+      if (this.aborted) {
+        log.info('cc', 'Aborted — skipping stale-listing cleanup');
+      } else if (failedTerms.length > 0) {
+        log.warn('cc', `Skipping stale-listing cleanup — ${failedTerms.length} search term(s) failed this run`);
+      } else if (activeIds.length > 0) {
         db.markStaleListings(activeIds);
       }
 
-      db.completeScrapeRun(runId, { totalFound, newCount, status: this.aborted ? 'aborted' : 'completed' });
+      // A run where every search term failed is a failure, not a success —
+      // recording it as 'completed' is what made this look like an empty result
+      // rather than a broken scrape.
+      const allTermsFailed = searchTermEntries.length > 0 && failedTerms.length === searchTermEntries.length;
+      let status = 'completed';
+      if (this.aborted) status = 'aborted';
+      else if (allTermsFailed) status = 'error';
+      else if (failedTerms.length > 0 || detailFailures > 0) status = 'partial';
+
+      db.completeScrapeRun(runId, { totalFound, newCount, status });
+
+      log.info('cc', `Scrape #${runId} ${status}: ${totalFound} found, ${newCount} new (${newVisibleCount} visible), ${skippedCount} price-filtered, ${failedTerms.length} term failure(s), ${detailFailures} listing failure(s)`);
+      if (allTermsFailed) {
+        log.error('cc', 'Every search term failed — see the errors above; the site was unreachable or rejected every request');
+      }
 
       this.emit('complete', {
         totalFound,
         newCount,
         newVisibleCount,
         skippedCount,
+        failedTerms,
+        detailFailures,
+        status,
         aborted: this.aborted,
       });
     } catch (err) {
       db.completeScrapeRun(runId, { totalFound, newCount, status: 'error' });
-      this.emit('error', { message: `Scrape failed: ${err.message}` });
+      const detail = describeError(err);
+      log.error('cc', `Scrape #${runId} crashed: ${detail}`);
+      this.emit('error', { message: `Scrape failed: ${detail}` });
     } finally {
       this.running = false;
     }

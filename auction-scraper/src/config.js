@@ -22,6 +22,10 @@ module.exports = {
 
   REQUEST_DELAY_MS: 1000,
 
+  // Abort a single HTTP request that hangs, so one stuck request can't stall
+  // an entire scrape indefinitely.
+  REQUEST_TIMEOUT_MS: parseInt(process.env.REQUEST_TIMEOUT_MS || '30000', 10),
+
   DB_PATH: process.env.DB_PATH || defaultDbPath,
 
   PORT: process.env.PORT || 3456,
